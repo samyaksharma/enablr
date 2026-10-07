@@ -51,4 +51,28 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     description: 'Reach Level 10',
     hint: 'Keep leveling up to reach Level 10',
   },
+  {
+    type: BadgeType.SwornIn,
+    name: 'Sworn In',
+    description: 'Join a guild for the first time',
+    hint: 'Get accepted into a guild',
+  },
+  {
+    type: BadgeType.Founder,
+    name: 'Founder',
+    description: 'Create a guild',
+    hint: 'Found a guild of your own',
+  },
+  {
+    type: BadgeType.OnCamera,
+    name: 'On Camera',
+    description: 'Have a proof video approved',
+    hint: 'Get a proof video approved in a guild',
+  },
+  {
+    type: BadgeType.GuildVeteran,
+    name: 'Guild Veteran',
+    description: 'Reach Level 10 in any guild',
+    hint: 'Reach Level 10 inside a guild',
+  },
 ];

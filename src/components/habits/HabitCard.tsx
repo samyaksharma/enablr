@@ -12,7 +12,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useHabitStore } from '../../stores/habitStore';
 import { CATEGORY_CONFIG } from '../../constants/categories';
 import { BASE_XP } from '../../constants/rpg';
-import { getStreakDays } from '../../utils/dateUtils';
+import { getHabitStreak } from '../../utils/recurrenceUtils';
 import { spacing, typography, borderRadius } from '../../constants/theme';
 
 interface HabitCardProps {
@@ -30,7 +30,10 @@ export function HabitCard({ habit, onPress, onComplete }: HabitCardProps) {
   const completeHabit = useHabitStore((s) => s.completeHabit);
 
   const scale = useSharedValue(1);
-  const streak = getStreakDays(completions.map((c) => c.completedAt));
+  const streak = getHabitStreak(
+    completions.map((c) => c.completedAt),
+    habit
+  );
   const categoryConfig = CATEGORY_CONFIG[habit.category];
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -48,7 +51,7 @@ export function HabitCard({ habit, onPress, onComplete }: HabitCardProps) {
 
     try {
       const { xpEarned } = await completeHabit(habit.id);
-      onComplete?.(xpEarned);
+      if (xpEarned > 0) onComplete?.(xpEarned);
     } catch {
       // Error handled by store
     }

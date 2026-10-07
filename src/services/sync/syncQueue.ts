@@ -19,8 +19,8 @@ export const syncQueue = {
     const db = await getDatabase();
 
     const [completions, badges, habits] = await Promise.all([
-      completionRepository.getUnsynced(db),
-      badgeRepository.getUnsynced(db),
+      completionRepository.getUnsynced(db, userId),
+      badgeRepository.getUnsynced(db, userId),
       habitRepository.getUnsynced(db, userId),
     ]);
 
@@ -37,8 +37,8 @@ export const syncQueue = {
     await badgeRepository.markSynced(db, badgeId);
   },
 
-  async markHabitSynced(habitId: string): Promise<void> {
+  async markHabitSynced(habitId: string, localVersion: number): Promise<void> {
     const db = await getDatabase();
-    await habitRepository.markSynced(db, habitId);
+    await habitRepository.markSynced(db, habitId, localVersion);
   },
 };

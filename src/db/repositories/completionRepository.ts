@@ -41,6 +41,28 @@ export const completionRepository = {
     };
   },
 
+  // A completion made on another device. Skipped if it is already here, or if
+  // its habit hasn't reached this device yet.
+  async insertFromRemote(
+    db: SQLite.SQLiteDatabase,
+    completion: Omit<Completion, 'synced'>
+  ): Promise<void> {
+    await db.runAsync(
+      `INSERT OR IGNORE INTO completions (id, habit_id, completed_at, xp_earned, synced, local_version, client_id)
+       SELECT ?, ?, ?, ?, 1, ?, ?
+       WHERE EXISTS (SELECT 1 FROM habits WHERE id = ?)`,
+      [
+        completion.id,
+        completion.habitId,
+        completion.completedAt,
+        completion.xpEarned,
+        completion.localVersion,
+        completion.clientId,
+        completion.habitId,
+      ]
+    );
+  },
+
   async getByHabitId(db: SQLite.SQLiteDatabase, habitId: string): Promise<Completion[]> {
     const rows = await db.getAllAsync<CompletionRow>(
       'SELECT * FROM completions WHERE habit_id = ? ORDER BY completed_at DESC',
@@ -81,9 +103,12 @@ export const completionRepository = {
     return rows.map((r) => r.completed_at);
   },
 
-  async getUnsynced(db: SQLite.SQLiteDatabase): Promise<Completion[]> {
+  async getUnsynced(db: SQLite.SQLiteDatabase, userId: string): Promise<Completion[]> {
     const rows = await db.getAllAsync<CompletionRow>(
-      'SELECT * FROM completions WHERE synced = 0'
+      `SELECT c.* FROM completions c
+       JOIN habits h ON c.habit_id = h.id
+       WHERE h.user_id = ? AND c.synced = 0`,
+      [userId]
     );
     return rows.map(rowToCompletion);
   },

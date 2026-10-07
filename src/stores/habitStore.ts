@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { Habit, Completion, Difficulty, HabitCategory, Recurrence } from '../types';
 import { getDatabase } from '../db/database';
-import { habitRepository } from '../db/repositories/habitRepository';
+import { habitRepository, HabitUpdates } from '../db/repositories/habitRepository';
 import { completionRepository } from '../db/repositories/completionRepository';
 import { badgeRepository } from '../db/repositories/badgeRepository';
 import { calculateXp } from '../services/rpg/xpCalculator';
 import { evaluateBadges, BadgeContext } from '../services/rpg/badgeEvaluator';
-import { getStreakDays } from '../utils/dateUtils';
-import { isScheduledForDate } from '../utils/recurrenceUtils';
+import { getHabitStreak, isScheduledForDate } from '../utils/recurrenceUtils';
+import { requestSync } from '../services/sync/syncTrigger';
+import { localNotifications } from '../services/notifications/localNotifications';
 import { generateId, getClientId } from '../utils/idGenerator';
 import { useProgressionStore } from './progressionStore';
 import { useAuthStore } from './authStore';
@@ -28,14 +29,13 @@ interface HabitState {
     category: HabitCategory;
     difficulty: Difficulty;
     scheduledTime?: string;
+    reminderEnabled?: boolean;
   }) => Promise<Habit>;
-  updateHabit: (
-    habitId: string,
-    updates: Partial<Pick<Habit, 'name' | 'description' | 'recurrence' | 'category' | 'difficulty' | 'scheduledTime'>>
-  ) => Promise<void>;
+  updateHabit: (habitId: string, updates: HabitUpdates) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
   completeHabit: (habitId: string) => Promise<{ xpEarned: number }>;
   isCompletedToday: (habitId: string) => boolean;
+  reset: () => void;
 }
 
 function filterTodaysHabits(habits: Habit[]): Habit[] {
@@ -93,6 +93,7 @@ export const useHabitStore = create<HabitState>((set, get) => ({
       todaysCompletedHabitIds: completedIds,
       isLoading: false,
     });
+    localNotifications.syncReminders(habits);
   },
 
   createHabit: async (params) => {
@@ -111,6 +112,7 @@ export const useHabitStore = create<HabitState>((set, get) => ({
       category: params.category,
       difficulty: params.difficulty,
       scheduledTime: params.scheduledTime,
+      reminderEnabled: params.reminderEnabled,
       clientId,
     });
 
@@ -120,9 +122,11 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     const sorted = sortTodaysHabits(todays, state.todaysCompletedHabitIds);
 
     set({ habits: newHabits, todaysHabits: sorted });
+    localNotifications.syncReminders(newHabits);
 
     // Check collector badge
     await checkBadgesAfterAction(db, userId, newHabits, state.todaysCompletedHabitIds, todays);
+    requestSync();
 
     return habit;
   },
@@ -140,6 +144,8 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     const sorted = sortTodaysHabits(todays, state.todaysCompletedHabitIds);
 
     set({ habits: newHabits, todaysHabits: sorted });
+    localNotifications.syncReminders(newHabits);
+    requestSync();
   },
 
   archiveHabit: async (habitId) => {
@@ -152,6 +158,8 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     const sorted = sortTodaysHabits(todays, state.todaysCompletedHabitIds);
 
     set({ habits: newHabits, todaysHabits: sorted });
+    localNotifications.syncReminders(newHabits);
+    requestSync();
   },
 
   completeHabit: async (habitId) => {
@@ -162,12 +170,16 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     const habit = await habitRepository.getById(db, habitId);
     if (!habit) throw new Error('Habit not found');
 
-    // Calculate streak
-    const completionDates = await completionRepository.getCompletionDatesForHabit(db, habitId);
-    const streakDays = getStreakDays(completionDates);
+    // A second tap, or a completion synced from another device, must not pay twice
+    if (await completionRepository.getTodayByHabitId(db, habitId)) {
+      return { xpEarned: 0 };
+    }
 
-    // Calculate XP (streak includes today's completion)
-    const xpEarned = calculateXp(habit.difficulty, streakDays + 1);
+    // Calculate streak, counting today's completion
+    const completionDates = await completionRepository.getCompletionDatesForHabit(db, habitId);
+    const streakDays = getHabitStreak([...completionDates, new Date().toISOString()], habit);
+
+    const xpEarned = calculateXp(habit.difficulty, streakDays);
 
     // Write completion
     const clientId = await getClientId();
@@ -206,6 +218,7 @@ export const useHabitStore = create<HabitState>((set, get) => ({
     // Evaluate badges
     const todays = filterTodaysHabits(state.habits);
     await checkBadgesAfterAction(db, userId, state.habits, newCompletedIds, todays);
+    requestSync();
 
     return { xpEarned };
   },
@@ -213,6 +226,15 @@ export const useHabitStore = create<HabitState>((set, get) => ({
   isCompletedToday: (habitId) => {
     return get().todaysCompletedHabitIds.has(habitId);
   },
+
+  reset: () =>
+    set({
+      habits: [],
+      completions: new Map(),
+      todaysHabits: [],
+      todaysCompletedHabitIds: new Set(),
+      isLoading: false,
+    }),
 }));
 
 async function checkBadgesAfterAction(
@@ -230,7 +252,7 @@ async function checkBadgesAfterAction(
   const habitStreaks = new Map<string, number>();
   for (const habit of habits) {
     const dates = await completionRepository.getCompletionDatesForHabit(db, habit.id);
-    habitStreaks.set(habit.id, getStreakDays(dates));
+    habitStreaks.set(habit.id, getHabitStreak(dates, habit));
   }
 
   const allTodayCompleted = todaysHabits.length > 0 && todaysHabits.every((h) => completedIds.has(h.id));

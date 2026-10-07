@@ -17,6 +17,10 @@ const BADGE_EMOJIS: Record<BadgeType, string> = {
   [BadgeType.Collector]: '\uD83C\uDF1F',
   [BadgeType.Overachiever]: '\uD83C\uDFC6',
   [BadgeType.Veteran]: '\u2694\uFE0F',
+  [BadgeType.SwornIn]: '\uD83E\uDD1D',
+  [BadgeType.Founder]: '\uD83C\uDFF0',
+  [BadgeType.OnCamera]: '\uD83C\uDFA5',
+  [BadgeType.GuildVeteran]: '\uD83D\uDEE1\uFE0F',
 };
 
 export function BadgeCard({ badgeType, earned }: BadgeCardProps) {

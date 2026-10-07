@@ -5,6 +5,11 @@ export enum BadgeType {
   Collector = 'collector',
   Overachiever = 'overachiever',
   Veteran = 'veteran',
+  // Granted by the server for guild events
+  SwornIn = 'sworn_in',
+  Founder = 'founder',
+  OnCamera = 'on_camera',
+  GuildVeteran = 'guild_veteran',
 }
 
 export interface Badge {

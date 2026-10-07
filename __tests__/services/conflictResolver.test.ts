@@ -11,6 +11,7 @@ function makeHabit(overrides: Partial<Habit> = {}): Habit {
     category: HabitCategory.Health,
     difficulty: Difficulty.Medium,
     scheduledTime: undefined,
+    reminderEnabled: true,
     archived: false,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',

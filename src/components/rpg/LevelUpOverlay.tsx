@@ -14,12 +14,13 @@ import { typography, spacing, borderRadius } from '../../constants/theme';
 interface LevelUpOverlayProps {
   visible: boolean;
   level: number;
+  subtitle?: string;
   onDismiss: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
 
-export function LevelUpOverlay({ visible, level, onDismiss }: LevelUpOverlayProps) {
+export function LevelUpOverlay({ visible, level, subtitle, onDismiss }: LevelUpOverlayProps) {
   const colors = useThemeStore((s) => s.colors);
   const overlayOpacity = useSharedValue(0);
   const contentScale = useSharedValue(0.3);
@@ -73,7 +74,7 @@ export function LevelUpOverlay({ visible, level, onDismiss }: LevelUpOverlayProp
           <Text style={[styles.title, { color: colors.gold }]}>LEVEL UP!</Text>
           <Text style={[styles.level, { color: colors.text }]}>Level {level}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Your power grows stronger
+            {subtitle ?? 'Your power grows stronger'}
           </Text>
           <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap to continue</Text>
         </Animated.View>
@@ -116,6 +117,7 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     marginTop: spacing.sm,
+    textAlign: 'center',
   },
   tapHint: {
     ...typography.small,

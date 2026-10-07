@@ -1,14 +1,20 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { convexHttpClient } from '../convex/convexClient';
+import { convex } from '../convex/convexClient';
 import { api } from '../../../convex/_generated/api';
+import { requestSync } from '../sync/syncTrigger';
 
 export const pushNotifications = {
-  async registerForPushNotifications(userId: string): Promise<string | null> {
-    if (!Device.isDevice) {
-      console.log('Push notifications require a physical device');
-      return null;
+  async registerForPushNotifications(): Promise<string | null> {
+    // Android 13+ only shows the permission prompt once a channel exists
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+      });
     }
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -23,46 +29,39 @@ export const pushNotifications = {
       return null;
     }
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-      });
+    // Local reminders work everywhere; push tokens need a physical device
+    if (!Device.isDevice) {
+      return null;
     }
 
     try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
+      // Needs an EAS project ID (app.json extra.eas.projectId) and, on Android,
+      // FCM credentials uploaded to that project.
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) return null;
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
       const token = tokenData.data;
 
       // Store token in Convex
-      await convexHttpClient.mutation(api.users.updatePushToken, {
-        tokenIdentifier: userId,
+      await convex.mutation(api.users.updatePushToken, {
         pushToken: token,
       });
 
       return token;
-    } catch (e) {
-      // Push tokens require FCM setup on Android — skip if not configured
-      console.log('Push token registration skipped:', e);
+    } catch {
+      // Push is optional: without it the app still works and local reminders still fire
       return null;
     }
   },
 
   setupNotificationListeners() {
-    const receivedListener = Notifications.addNotificationReceivedListener((notification) => {
-      // Handle foreground notifications
-      console.log('Notification received:', notification);
-    });
-
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      // Could navigate to the relevant habit
-      console.log('Notification tapped:', data);
+    const responseListener = Notifications.addNotificationResponseReceivedListener(() => {
+      // Tapping a notification opens the app; pull anything new straight away
+      requestSync();
     });
 
     return () => {
-      receivedListener.remove();
       responseListener.remove();
     };
   },

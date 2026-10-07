@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
+  StyleProp,
   ViewStyle,
   TextStyle,
 } from 'react-native';
@@ -17,8 +18,8 @@ interface ButtonProps {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export function Button({
@@ -33,7 +34,7 @@ export function Button({
 }: ButtonProps) {
   const colors = useThemeStore((s) => s.colors);
 
-  const buttonStyles: ViewStyle[] = [
+  const buttonStyles: StyleProp<ViewStyle> = [
     styles.base,
     size === 'sm' && styles.sm,
     size === 'lg' && styles.lg,
@@ -51,7 +52,7 @@ export function Button({
     style,
   ];
 
-  const textStyles: TextStyle[] = [
+  const textStyles: StyleProp<TextStyle> = [
     styles.text,
     size === 'sm' && styles.textSm,
     size === 'lg' && styles.textLg,

@@ -1,25 +1,52 @@
 import { Recurrence } from '../types';
-import { differenceInCalendarDays, startOfDay } from 'date-fns';
+import { countStreak, dayNumber, isScheduledOnDay, toDayKey } from './schedule';
+import { addDays, differenceInCalendarDays, format, startOfDay } from 'date-fns';
 
 export function isScheduledForDate(recurrence: Recurrence, date: Date, habitCreatedAt: string): boolean {
-  switch (recurrence.type) {
-    case 'daily':
-      return true;
+  return isScheduledOnDay(
+    recurrence,
+    dayNumber(toDayKey(date)),
+    dayNumber(toDayKey(new Date(habitCreatedAt)))
+  );
+}
 
-    case 'specific_days': {
-      const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-      return recurrence.days?.includes(dayOfWeek) ?? false;
+// Consecutive scheduled days completed, up to and including today. Days the
+// habit isn't due don't break the streak.
+export function getHabitStreak(
+  completionDates: string[],
+  habit: { recurrence: Recurrence; createdAt: string },
+  today: Date = new Date()
+): number {
+  const done = new Set(completionDates.map((d) => dayNumber(toDayKey(new Date(d)))));
+  return countStreak(
+    done,
+    habit.recurrence,
+    dayNumber(toDayKey(new Date(habit.createdAt))),
+    dayNumber(toDayKey(today))
+  );
+}
+
+// The next day after `from` on which the habit is due, or null if it never recurs
+// (e.g. "specific days" with no days selected).
+export function getNextScheduledDate(
+  recurrence: Recurrence,
+  habitCreatedAt: string,
+  from: Date = new Date()
+): Date | null {
+  const start = startOfDay(from);
+  for (let offset = 1; offset <= 366; offset++) {
+    const candidate = addDays(start, offset);
+    if (isScheduledForDate(recurrence, candidate, habitCreatedAt)) {
+      return candidate;
     }
-
-    case 'interval': {
-      const interval = recurrence.every ?? 1;
-      const createdDate = startOfDay(new Date(habitCreatedAt));
-      const targetDate = startOfDay(date);
-      const daysDiff = differenceInCalendarDays(targetDate, createdDate);
-      return daysDiff >= 0 && daysDiff % interval === 0;
-    }
-
-    default:
-      return false;
   }
+  return null;
+}
+
+export function formatNextScheduled(next: Date | null, from: Date = new Date()): string {
+  if (!next) return 'No days selected';
+  const daysAway = differenceInCalendarDays(next, startOfDay(from));
+  if (daysAway === 1) return 'Tomorrow';
+  if (daysAway < 7) return format(next, 'EEEE');
+  return format(next, 'MMM d');
 }

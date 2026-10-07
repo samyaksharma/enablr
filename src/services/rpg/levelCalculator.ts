@@ -1,12 +1,13 @@
 import { MAX_LEVEL } from '../../constants/rpg';
 
+// Total XP required to reach a level (Level N requires N² × 100 XP).
 export function getXpForLevel(level: number): number {
-  if (level <= 1) return 0;
-  return (level - 1) * (level - 1) * 100;
+  return level * level * 100;
 }
 
 export function getLevelForXp(totalXp: number): number {
-  for (let level = MAX_LEVEL; level >= 1; level--) {
+  // Everyone starts at level 1, so only levels 2+ have a threshold to meet.
+  for (let level = MAX_LEVEL; level > 1; level--) {
     if (totalXp >= getXpForLevel(level)) {
       return level;
     }
@@ -34,7 +35,7 @@ export function getXpProgress(totalXp: number): {
     };
   }
 
-  const currentLevelXp = getXpForLevel(level);
+  const currentLevelXp = level <= 1 ? 0 : getXpForLevel(level);
   const nextLevelXp = getXpForLevel(level + 1);
   const xpIntoLevel = totalXp - currentLevelXp;
   const xpNeeded = nextLevelXp - currentLevelXp;

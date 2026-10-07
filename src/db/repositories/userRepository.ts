@@ -26,17 +26,26 @@ function rowToUser(row: UserRow): User {
 export const userRepository = {
   async create(
     db: SQLite.SQLiteDatabase,
-    user: { id: string; name: string; characterName: string; characterClass: CharacterClass }
+    user: {
+      id: string;
+      name: string;
+      characterName: string;
+      characterClass: CharacterClass;
+      xp?: number;
+      level?: number;
+    }
   ): Promise<User> {
     const now = new Date().toISOString();
+    const xp = user.xp ?? 0;
+    const level = user.level ?? 1;
     await db.runAsync(
-      'INSERT INTO users (id, name, character_name, character_class, xp, level, created_at) VALUES (?, ?, ?, ?, 0, 1, ?)',
-      [user.id, user.name, user.characterName, user.characterClass, now]
+      'INSERT INTO users (id, name, character_name, character_class, xp, level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [user.id, user.name, user.characterName, user.characterClass, xp, level, now]
     );
     return {
       ...user,
-      xp: 0,
-      level: 1,
+      xp,
+      level,
       createdAt: now,
     };
   },

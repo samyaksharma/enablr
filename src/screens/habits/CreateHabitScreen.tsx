@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { TimePicker } from '../../components/ui/TimePicker';
 import { DifficultyPicker } from '../../components/habits/DifficultyPicker';
 import { useHabitStore } from '../../stores/habitStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -25,6 +26,7 @@ export function CreateHabitScreen() {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [intervalDays, setIntervalDays] = useState('2');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [reminderEnabled, setReminderEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
@@ -32,6 +34,11 @@ export function CreateHabitScreen() {
       Alert.alert('Required', 'Please enter a habit name');
       return;
     }
+    if (recurrenceType === 'specific_days' && selectedDays.length === 0) {
+      Alert.alert('Required', 'Pick at least one day for this habit');
+      return;
+    }
+    const time = scheduledTime || undefined;
 
     setLoading(true);
 
@@ -48,7 +55,8 @@ export function CreateHabitScreen() {
         recurrence,
         category,
         difficulty,
-        scheduledTime: scheduledTime || undefined,
+        scheduledTime: time,
+        reminderEnabled,
       });
       navigation.goBack();
     } catch {
@@ -178,12 +186,23 @@ export function CreateHabitScreen() {
         />
       )}
 
-      <Input
+      <TimePicker
         label="Scheduled Time (optional)"
-        placeholder="e.g., 08:00"
         value={scheduledTime}
-        onChangeText={setScheduledTime}
+        onChange={setScheduledTime}
       />
+
+      {scheduledTime !== '' && (
+        <View style={styles.reminderRow}>
+          <Text style={[styles.reminderLabel, { color: colors.text }]}>Remind me at this time</Text>
+          <Switch
+            value={reminderEnabled}
+            onValueChange={setReminderEnabled}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      )}
 
       <Button title="Create Habit" onPress={handleSave} loading={loading} size="lg" style={{ marginTop: spacing.lg }} />
     </ScrollView>
@@ -193,6 +212,15 @@ export function CreateHabitScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  reminderLabel: {
+    ...typography.body,
   },
   content: {
     padding: spacing.xl,

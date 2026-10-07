@@ -1,70 +1,34 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-export const upsertUser = mutation({
+// The caller's identity always comes from the auth session, never from arguments.
+export async function requireUserId(ctx: QueryCtx | MutationCtx) {
+  const userId = await getAuthUserId(ctx);
+  if (userId === null) {
+    throw new Error("Not authenticated");
+  }
+  return userId;
+}
+
+export const updatePushToken = mutation({
   args: {
-    tokenIdentifier: v.string(),
-    name: v.string(),
-    email: v.optional(v.string()),
-    characterName: v.optional(v.string()),
-    characterClass: v.optional(v.string()),
+    pushToken: v.string(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        name: args.name,
-        ...(args.email && { email: args.email }),
-        ...(args.characterName && { characterName: args.characterName }),
-        ...(args.characterClass && { characterClass: args.characterClass }),
-      });
-      return existing._id;
-    }
-
-    return await ctx.db.insert("users", {
-      tokenIdentifier: args.tokenIdentifier,
-      name: args.name,
-      email: args.email,
-      characterName: args.characterName ?? "",
-      characterClass: args.characterClass ?? "warrior",
-      xp: 0,
-      level: 1,
+    const userId = await requireUserId(ctx);
+    await ctx.db.patch(userId, {
+      pushToken: args.pushToken,
+      pushTokenUpdatedAt: new Date().toISOString(),
     });
   },
 });
 
-export const updatePushToken = mutation({
-  args: {
-    tokenIdentifier: v.string(),
-    pushToken: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
-      .first();
-
-    if (user) {
-      await ctx.db.patch(user._id, {
-        pushToken: args.pushToken,
-        pushTokenUpdatedAt: new Date().toISOString(),
-      });
-    }
-  },
-});
-
 export const currentUser = query({
-  args: {
-    tokenIdentifier: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
-      .first();
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    return await ctx.db.get(userId);
   },
 });

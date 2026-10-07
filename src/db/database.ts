@@ -2,12 +2,23 @@ import * as SQLite from 'expo-sqlite';
 import { MIGRATIONS } from './migrations';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let opening: Promise<SQLite.SQLiteDatabase> | null = null;
 
-export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (db) return db;
-  db = await SQLite.openDatabaseAsync('enablr.db');
-  await runMigrations(db);
-  return db;
+// Callers that arrive while the database is still opening wait for the same
+// open + migrate, so migrations can never run twice or be seen half-applied.
+export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (db) return Promise.resolve(db);
+  if (!opening) {
+    opening = (async () => {
+      const database = await SQLite.openDatabaseAsync('enablr.db');
+      await runMigrations(database);
+      db = database;
+      return database;
+    })().finally(() => {
+      opening = null;
+    });
+  }
+  return opening;
 }
 
 async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {

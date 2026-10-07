@@ -36,6 +36,17 @@ export const badgeRepository = {
     };
   },
 
+  async insertFromRemote(
+    db: SQLite.SQLiteDatabase,
+    badge: { id: string; userId: string; badgeType: BadgeType; earnedAt: string }
+  ): Promise<Badge> {
+    await db.runAsync(
+      'INSERT OR IGNORE INTO badges (id, user_id, badge_type, earned_at, synced) VALUES (?, ?, ?, ?, 1)',
+      [badge.id, badge.userId, badge.badgeType, badge.earnedAt]
+    );
+    return { ...badge, synced: true };
+  },
+
   async getByUserId(db: SQLite.SQLiteDatabase, userId: string): Promise<Badge[]> {
     const rows = await db.getAllAsync<BadgeRow>(
       'SELECT * FROM badges WHERE user_id = ? ORDER BY earned_at ASC',
@@ -52,8 +63,11 @@ export const badgeRepository = {
     return row !== null;
   },
 
-  async getUnsynced(db: SQLite.SQLiteDatabase): Promise<Badge[]> {
-    const rows = await db.getAllAsync<BadgeRow>('SELECT * FROM badges WHERE synced = 0');
+  async getUnsynced(db: SQLite.SQLiteDatabase, userId: string): Promise<Badge[]> {
+    const rows = await db.getAllAsync<BadgeRow>(
+      'SELECT * FROM badges WHERE user_id = ? AND synced = 0',
+      [userId]
+    );
     return rows.map(rowToBadge);
   },
 

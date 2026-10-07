@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,17 +15,58 @@ import { spacing, typography, borderRadius } from '../../constants/theme';
 import { HomeStackParamList } from '../../navigation/MainTabs';
 import { BADGE_DEFINITIONS } from '../../constants/rpg';
 import { useNotificationPermission } from '../../hooks/useNotificationPermission';
+import { useCachedQuery } from '../../hooks/useCachedQuery';
+import { useSyncStore } from '../../stores/syncStore';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
+import { GuildEmblem } from '../../components/guild/GuildBits';
+import { GuildTaskRow, isDueToday } from '../../components/guild/GuildTaskRow';
+import { submitGuildTask } from '../../services/guild/submitTask';
+import { toDayKey } from '../../utils/schedule';
 
 export function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const colors = useThemeStore((s) => s.colors);
   const user = useAuthStore((s) => s.user);
-  const { todaysHabits, isLoading, loadHabits } = useHabitStore();
+  const { habits, todaysHabits, isLoading, loadHabits } = useHabitStore();
   const { showLevelUp, newLevelReached, dismissLevelUp, recentBadge, dismissBadge } =
     useProgressionStore();
 
-  // Request notification permission after first habit
-  useNotificationPermission();
+  const syncNotice = useSyncStore((s) => s.notice);
+  const clearSyncNotice = useSyncStore((s) => s.clearNotice);
+
+  // Guild data comes from the server, with the last result cached for offline
+  const today = toDayKey(new Date());
+  const myGuilds = useCachedQuery('guilds.myGuilds', api.guilds.myGuilds, {});
+  const guildTaskGroups = useCachedQuery(`guildTasks.mine:${today}`, api.guildTasks.mine, { today });
+
+  // Open guild tasks: due today and not yet approved
+  const guildGroups = useMemo(
+    () =>
+      (guildTaskGroups ?? [])
+        .map((group) => ({
+          ...group,
+          tasks: group.tasks
+            .filter((task) => {
+              const status = task.mine?.status ?? null;
+              return isDueToday(task) && status !== 'approved' && status !== 'revoked';
+            })
+            .sort((a, b) => (a.dueAt ?? Infinity) - (b.dueAt ?? Infinity)),
+        }))
+        .filter((group) => group.tasks.length > 0),
+    [guildTaskGroups]
+  );
+
+  // Ask for notification permission after the first habit or the first guild
+  useNotificationPermission((myGuilds?.guilds.length ?? 0) > 0);
+
+  const openGuild = (guildId: Id<'guilds'>) => {
+    navigation.getParent()?.navigate('Guilds', {
+      screen: 'Guild',
+      params: { guildId },
+      initial: false,
+    });
+  };
 
   const [xpBurst, setXpBurst] = useState<{ amount: number; visible: boolean }>({
     amount: 0,
@@ -41,7 +82,13 @@ export function HomeScreen() {
     setTimeout(() => setXpBurst((prev) => ({ ...prev, visible: false })), 1500);
   }, []);
 
-  const isEmpty = todaysHabits.length === 0 && !isLoading;
+  // Habits that exist but aren't due today still need to be visible and editable
+  const upcomingHabits = useMemo(() => {
+    const todaysIds = new Set(todaysHabits.map((h) => h.id));
+    return habits.filter((h) => !todaysIds.has(h.id));
+  }, [habits, todaysHabits]);
+
+  const isEmpty = habits.length === 0 && guildGroups.length === 0 && !isLoading;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -82,11 +129,44 @@ export function HomeScreen() {
             <RefreshControl refreshing={isLoading} onRefresh={loadHabits} tintColor={colors.primary} />
           }
         >
+          {todaysHabits.length === 0 && (
+            <Text style={[styles.nothingToday, { color: colors.textSecondary }]}>
+              {habits.length === 0
+                ? 'No habits of your own yet. Tap + to add one.'
+                : 'No habits due today. Rest up, adventurer.'}
+            </Text>
+          )}
           <HabitList
             habits={todaysHabits}
+            upcoming={upcomingHabits}
             onHabitPress={(habit) => navigation.navigate('EditHabit', { habitId: habit.id })}
             onComplete={handleComplete}
           />
+
+          {guildGroups.length > 0 && (
+            <View style={styles.guildSection}>
+              <Text style={[styles.guildSectionTitle, { color: colors.textSecondary }]}>
+                Guild Tasks
+              </Text>
+              {guildGroups.map((group) => (
+                <View key={group.guildId}>
+                  <TouchableOpacity
+                    style={styles.guildHeader}
+                    onPress={() => openGuild(group.guildId)}
+                    activeOpacity={0.7}
+                  >
+                    <GuildEmblem url={group.emblemUrl} name={group.guildName} size={28} />
+                    <Text style={[styles.guildName, { color: colors.text }]} numberOfLines={1}>
+                      {group.guildName}
+                    </Text>
+                  </TouchableOpacity>
+                  {group.tasks.map((task) => (
+                    <GuildTaskRow key={task._id} task={task} onComplete={submitGuildTask} />
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
 
@@ -120,6 +200,17 @@ export function HomeScreen() {
           type="success"
         />
       )}
+
+      {/* A habit archived on another device, etc. */}
+      {syncNotice && (
+        <Toast
+          message={syncNotice}
+          visible={!!syncNotice}
+          onDismiss={clearSyncNotice}
+          duration={5000}
+          type="info"
+        />
+      )}
     </View>
   );
 }
@@ -147,6 +238,32 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.xl,
+  },
+  nothingToday: {
+    ...typography.body,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
+  },
+  guildSection: {
+    paddingBottom: spacing.xxxl + spacing.xxl,
+  },
+  guildSectionTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  guildHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  guildName: {
+    ...typography.bodyBold,
+    flex: 1,
   },
   emptyState: {
     flex: 1,

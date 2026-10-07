@@ -30,6 +30,7 @@ export interface Habit {
   difficulty: Difficulty;
   archived: boolean;
   scheduledTime?: string; // HH:mm format
+  reminderEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   clientId: string;

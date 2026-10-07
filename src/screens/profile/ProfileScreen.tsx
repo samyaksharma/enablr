@@ -9,12 +9,16 @@ import { useThemeStore } from '../../stores/themeStore';
 import { getDatabase } from '../../db/database';
 import { completionRepository } from '../../db/repositories/completionRepository';
 import { spacing, typography } from '../../constants/theme';
+import { api } from '../../../convex/_generated/api';
+import { useCachedQuery } from '../../hooks/useCachedQuery';
+import { GuildEmblem, GuildLevelBar, RoleChip } from '../../components/guild/GuildBits';
 
 export function ProfileScreen() {
   const colors = useThemeStore((s) => s.colors);
   const user = useAuthStore((s) => s.user);
   const { level, xp, badges } = useProgressionStore();
   const [totalCompletions, setTotalCompletions] = useState(0);
+  const myGuilds = useCachedQuery('guilds.myGuilds', api.guilds.myGuilds, {});
 
   useEffect(() => {
     async function loadStats() {
@@ -24,7 +28,7 @@ export function ProfileScreen() {
       setTotalCompletions(count);
     }
     loadStats();
-  }, [user]);
+  }, [user, xp]);
 
   if (!user) return null;
 
@@ -62,6 +66,26 @@ export function ProfileScreen() {
           </Card>
         ))}
       </View>
+
+      {myGuilds && myGuilds.guilds.length > 0 ? (
+        <View style={styles.guilds}>
+          <Text style={[styles.guildsTitle, { color: colors.textSecondary }]}>Guilds</Text>
+          {myGuilds.guilds.map((guild) => (
+            <Card key={guild._id} style={styles.guildCard}>
+              <View style={styles.guildRow}>
+                <GuildEmblem url={guild.emblemUrl} name={guild.name} size={40} />
+                <View style={styles.guildText}>
+                  <Text style={[styles.guildName, { color: colors.text }]} numberOfLines={1}>
+                    {guild.name}
+                  </Text>
+                  <RoleChip name={guild.roleName} color={guild.roleColor} iconUrl={guild.roleIconUrl} />
+                </View>
+              </View>
+              <GuildLevelBar xp={guild.xp} compact />
+            </Card>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -102,5 +126,33 @@ const styles = StyleSheet.create({
   statLabel: {
     ...typography.small,
     marginTop: spacing.xs,
+  },
+  guilds: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  guildsTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  guildCard: {
+    marginBottom: spacing.md,
+  },
+  guildRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  guildText: {
+    flex: 1,
+    marginLeft: spacing.md,
+    gap: spacing.xs,
+  },
+  guildName: {
+    ...typography.bodyBold,
   },
 });

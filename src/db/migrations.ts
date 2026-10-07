@@ -52,4 +52,32 @@ export const MIGRATIONS = [
       `INSERT INTO schema_version (version) VALUES (1);`,
     ],
   },
+  {
+    // Rows written before accounts had real IDs were all filed under one
+    // placeholder user. They were test data only, so start clean.
+    version: 2,
+    statements: [
+      `DELETE FROM completions;`,
+      `DELETE FROM badges;`,
+      `DELETE FROM habits;`,
+      `DELETE FROM users;`,
+      `INSERT INTO schema_version (version) VALUES (2);`,
+    ],
+  },
+  {
+    version: 3,
+    statements: [
+      `ALTER TABLE habits ADD COLUMN reminder_enabled INTEGER NOT NULL DEFAULT 1;`,
+      // Last known result of each guild query, so guild screens open instantly
+      // and stay readable offline. The server remains the source of truth.
+      `CREATE TABLE IF NOT EXISTS query_cache (
+        user_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, key)
+      );`,
+      `INSERT INTO schema_version (version) VALUES (3);`,
+    ],
+  },
 ];

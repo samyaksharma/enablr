@@ -63,6 +63,7 @@ export function CharacterCreationScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
     >
       <Text style={[styles.title, { color: colors.text }]}>Create Your Character</Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>

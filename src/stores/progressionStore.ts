@@ -18,6 +18,7 @@ interface ProgressionState {
   dismissLevelUp: () => void;
   dismissBadge: () => void;
   hydrate: (xp: number, level: number, badges: Badge[]) => void;
+  reset: () => void;
 }
 
 export const useProgressionStore = create<ProgressionState>((set, get) => ({
@@ -67,5 +68,16 @@ export const useProgressionStore = create<ProgressionState>((set, get) => ({
       level,
       badges,
       xpProgress: getXpProgress(xp),
+    }),
+
+  reset: () =>
+    set({
+      xp: 0,
+      level: 1,
+      badges: [],
+      showLevelUp: false,
+      newLevelReached: 0,
+      recentBadge: null,
+      xpProgress: getXpProgress(0),
     }),
 }));

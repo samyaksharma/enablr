@@ -54,10 +54,10 @@ describe('getXpProgress', () => {
   it('shows correct progress at level 1', () => {
     const progress = getXpProgress(200);
     expect(progress.level).toBe(1);
-    expect(progress.currentLevelXp).toBe(100);
+    expect(progress.currentLevelXp).toBe(0);
     expect(progress.nextLevelXp).toBe(400);
-    expect(progress.xpIntoLevel).toBe(100);
-    expect(progress.progress).toBeCloseTo(100 / 300, 2);
+    expect(progress.xpIntoLevel).toBe(200);
+    expect(progress.progress).toBeCloseTo(200 / 400, 2);
   });
 
   it('shows 0 progress at exact level boundary', () => {

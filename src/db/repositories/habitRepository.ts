@@ -10,6 +10,7 @@ interface HabitRow {
   category: string;
   difficulty: string;
   scheduled_time: string | null;
+  reminder_enabled: number;
   archived: number;
   created_at: string;
   updated_at: string;
@@ -28,6 +29,7 @@ function rowToHabit(row: HabitRow): Habit {
     category: row.category as HabitCategory,
     difficulty: row.difficulty as Difficulty,
     scheduledTime: row.scheduled_time ?? undefined,
+    reminderEnabled: row.reminder_enabled === 1,
     archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -37,15 +39,26 @@ function rowToHabit(row: HabitRow): Habit {
   };
 }
 
+export type HabitUpdates = Partial<
+  Pick<Habit, 'name' | 'description' | 'recurrence' | 'category' | 'difficulty' | 'reminderEnabled'>
+> & {
+  // null clears the scheduled time
+  scheduledTime?: string | null;
+};
+
 export const habitRepository = {
   async create(
     db: SQLite.SQLiteDatabase,
-    habit: Omit<Habit, 'archived' | 'createdAt' | 'updatedAt' | 'localVersion' | 'synced'>
+    habit: Omit<
+      Habit,
+      'archived' | 'createdAt' | 'updatedAt' | 'localVersion' | 'synced' | 'reminderEnabled'
+    > & { reminderEnabled?: boolean }
   ): Promise<Habit> {
     const now = new Date().toISOString();
+    const reminderEnabled = habit.reminderEnabled ?? true;
     await db.runAsync(
-      `INSERT INTO habits (id, user_id, name, description, recurrence, category, difficulty, scheduled_time, archived, created_at, updated_at, client_id, local_version, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 0)`,
+      `INSERT INTO habits (id, user_id, name, description, recurrence, category, difficulty, scheduled_time, reminder_enabled, archived, created_at, updated_at, client_id, local_version, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1, 0)`,
       [
         habit.id,
         habit.userId,
@@ -55,6 +68,7 @@ export const habitRepository = {
         habit.category,
         habit.difficulty,
         habit.scheduledTime ?? null,
+        reminderEnabled ? 1 : 0,
         now,
         now,
         habit.clientId,
@@ -62,6 +76,7 @@ export const habitRepository = {
     );
     return {
       ...habit,
+      reminderEnabled,
       archived: false,
       createdAt: now,
       updatedAt: now,
@@ -70,14 +85,10 @@ export const habitRepository = {
     };
   },
 
-  async update(
-    db: SQLite.SQLiteDatabase,
-    habitId: string,
-    updates: Partial<Pick<Habit, 'name' | 'description' | 'recurrence' | 'category' | 'difficulty' | 'scheduledTime'>>
-  ): Promise<void> {
+  async update(db: SQLite.SQLiteDatabase, habitId: string, updates: HabitUpdates): Promise<void> {
     const now = new Date().toISOString();
     const sets: string[] = ['updated_at = ?', 'local_version = local_version + 1', 'synced = 0'];
-    const values: (string | null)[] = [now];
+    const values: (string | number | null)[] = [now];
 
     if (updates.name !== undefined) {
       sets.push('name = ?');
@@ -103,9 +114,54 @@ export const habitRepository = {
       sets.push('scheduled_time = ?');
       values.push(updates.scheduledTime);
     }
+    if (updates.reminderEnabled !== undefined) {
+      sets.push('reminder_enabled = ?');
+      values.push(updates.reminderEnabled ? 1 : 0);
+    }
 
     values.push(habitId);
     await db.runAsync(`UPDATE habits SET ${sets.join(', ')} WHERE id = ?`, values);
+  },
+
+  // Writes a habit exactly as the server has it. Unlike update(), this keeps the
+  // server's timestamps and marks the row synced, so it is not pushed back.
+  async upsertFromRemote(
+    db: SQLite.SQLiteDatabase,
+    habit: Omit<Habit, 'synced'>
+  ): Promise<void> {
+    await db.runAsync(
+      `INSERT INTO habits (id, user_id, name, description, recurrence, category, difficulty, scheduled_time, reminder_enabled, archived, created_at, updated_at, client_id, local_version, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         description = excluded.description,
+         recurrence = excluded.recurrence,
+         category = excluded.category,
+         difficulty = excluded.difficulty,
+         scheduled_time = excluded.scheduled_time,
+         reminder_enabled = excluded.reminder_enabled,
+         archived = excluded.archived,
+         updated_at = excluded.updated_at,
+         client_id = excluded.client_id,
+         local_version = excluded.local_version,
+         synced = 1`,
+      [
+        habit.id,
+        habit.userId,
+        habit.name,
+        habit.description,
+        JSON.stringify(habit.recurrence),
+        habit.category,
+        habit.difficulty,
+        habit.scheduledTime ?? null,
+        habit.reminderEnabled ? 1 : 0,
+        habit.archived ? 1 : 0,
+        habit.createdAt,
+        habit.updatedAt,
+        habit.clientId,
+        habit.localVersion,
+      ]
+    );
   },
 
   async archive(db: SQLite.SQLiteDatabase, habitId: string): Promise<void> {
@@ -145,7 +201,11 @@ export const habitRepository = {
     return rows.map(rowToHabit);
   },
 
-  async markSynced(db: SQLite.SQLiteDatabase, habitId: string): Promise<void> {
-    await db.runAsync('UPDATE habits SET synced = 1 WHERE id = ?', [habitId]);
+  // Only clears the flag if the row hasn't been edited again since it was read
+  async markSynced(db: SQLite.SQLiteDatabase, habitId: string, localVersion: number): Promise<void> {
+    await db.runAsync('UPDATE habits SET synced = 1 WHERE id = ? AND local_version = ?', [
+      habitId,
+      localVersion,
+    ]);
   },
 };

@@ -38,6 +38,15 @@
           "icon": "./assets/notification-icon.png",
           "color": "#7C5CFC"
         }
+      ],
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Enablr uses your photos so you can choose a guild emblem, a role icon or a proof video.",
+          "cameraPermission": "Enablr uses the camera so you can record a proof video for a guild task.",
+          "microphonePermission": "Enablr uses the microphone to record sound in your proof videos."
+        }
       ]
     ]
   }

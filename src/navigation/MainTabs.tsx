@@ -9,6 +9,7 @@ import { EditHabitScreen } from '../screens/habits/EditHabitScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { BadgesScreen } from '../screens/badges/BadgesScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { GuildStackNavigator } from './GuildStack';
 import { useThemeStore } from '../stores/themeStore';
 import { spacing } from '../constants/theme';
 
@@ -48,6 +49,7 @@ function HomeStackNavigator() {
 
 export type MainTabParamList = {
   Home: undefined;
+  Guilds: undefined;
   Badges: undefined;
   Profile: undefined;
   Settings: undefined;
@@ -58,6 +60,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 function TabIcon({ label, focused, color }: { label: string; focused: boolean; color: string }) {
   const icons: Record<string, string> = {
     Home: '\u2694\uFE0F',
+    Guilds: '\uD83D\uDEA9',
     Badges: '\uD83C\uDFC5',
     Profile: '\uD83E\uDDD9',
     Settings: '\u2699\uFE0F',
@@ -94,6 +97,7 @@ export function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeStackNavigator} />
+      <Tab.Screen name="Guilds" component={GuildStackNavigator} />
       <Tab.Screen name="Badges" component={BadgesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />

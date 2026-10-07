@@ -35,7 +35,7 @@ export function BadgesScreen() {
       {earnedCount === 0 && (
         <View style={styles.emptyState}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Complete habits to unlock badges and prove your dedication!
+            Complete habits and guild tasks to unlock badges and prove your dedication!
           </Text>
         </View>
       )}

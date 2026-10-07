@@ -1,8 +1,10 @@
+import { AppState, NativeEventSubscription } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { useSyncStore } from '../../stores/syncStore';
 import { syncService } from '../sync/syncService';
 
 let unsubscribe: (() => void) | null = null;
+let appStateSubscription: NativeEventSubscription | null = null;
 
 export const connectivityMonitor = {
   start() {
@@ -19,6 +21,13 @@ export const connectivityMonitor = {
         syncService.runSync();
       }
     });
+
+    // Sync whenever the app comes back to the foreground
+    appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        syncService.runSync();
+      }
+    });
   },
 
   stop() {
@@ -26,6 +35,8 @@ export const connectivityMonitor = {
       unsubscribe();
       unsubscribe = null;
     }
+    appStateSubscription?.remove();
+    appStateSubscription = null;
   },
 
   startPeriodicSync(intervalMs = 15 * 60 * 1000) {
